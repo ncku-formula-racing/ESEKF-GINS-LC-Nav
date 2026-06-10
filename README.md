@@ -44,3 +44,14 @@ How each number is chosen: next section.  Where each one enters the filter:
 [Derivation](#derivation).
 
 ## Tuning (MTi-630 + PX1120S)
+## Benchmark
+
+`tests/i2nav_test.c`, velocity RMSE (m/s):
+
+| Dataset | EKF vN / vE | GNSS-only vN / vE |
+|---|---|---|
+| ICM20602 | 0.016 / 0.015 | 0.247 / 0.257 |
+| ADIS16460 | 0.010 / 0.009 | 0.267 / 0.276 |
+| ADIS16465 | 0.013 / 0.013 | 0.265 / 0.275 |
+| i300 | 0.007 / 0.007 | 0.265 / 0.275 |
+
