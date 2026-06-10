@@ -64,7 +64,9 @@ int EKF_Update(EKF_Context *ctx, arm_matrix_instance_f32 *H,
     uint16_t n = ctx->n;
 
     // Bounds: caller must respect the max measurement dim baked into work_mem.
-    if (m == 0 || m > ctx->m || z->numCols != 1 || H->numRows != m ||
+    // m <= n is also required -- the K computation below reuses T1 (sized
+    // n*n) as an n*m temporary.
+    if (m == 0 || m > ctx->m || m > n || z->numCols != 1 || H->numRows != m ||
         H->numCols != n) {
         return -2;
     }

@@ -7,3 +7,4 @@
 build/
 .cache/
 test/
+tests/i2nav-datasets/

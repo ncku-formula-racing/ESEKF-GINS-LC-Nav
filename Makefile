@@ -1,6 +1,6 @@
 all: format
 	@mkdir -p build	
-	cmake -S . -B build
+	cmake -S . -B build -DKF_GINS_BUILD_TESTS=ON
 	cmake --build build
 
 format:

@@ -83,13 +83,23 @@ typedef struct {
 #define NAV_GNSS_GATED -1   // innovation failed the chi-square gate
 #define NAV_GNSS_FAILED -2  // EKF update returned error (e.g. singular S)
 
-// vel0: NED velocity (m/s), quat0: body-to-NED [w,x,y,z], gravity: (m/s^2)
+/// vel0:    initial NED velocity (m/s), 3 elements
+/// quat0:   initial body-to-NED quaternion [w,x,y,z], 4 elements, unit norm
+/// gravity: local gravity magnitude (m/s^2), e.g. 9.81
 void NAV_Init(NAV_Context *ctx, float32_t *vel0, float32_t *quat0,
               float32_t gravity, const NAV_Config *cfg);
 
+/// Propagate one raw IMU sample (bias compensation happens internally).
+///   accel: raw specific force in body frame (m/s^2), 3 elements
+///   gyro:  raw angular rate in body frame (rad/s), 3 elements
+///   dt:    time since previous IMU sample (s)
 void NAV_FeedIMU(NAV_Context *ctx, const float32_t *accel,
                  const float32_t *gyro, float32_t dt);
 
+/// GNSS horizontal velocity update (call after NAV_FeedIMU).
+///   vN, vE: GNSS-measured North / East velocity (m/s), at the antenna --
+///           the configured lever arm is compensated internally.
+/// Returns NAV_GNSS_OK, NAV_GNSS_GATED or NAV_GNSS_FAILED.
 int NAV_FeedGNSS_Vel(NAV_Context *ctx, float32_t vN, float32_t vE);
 
 // Hybrid attitude aid: use the MTi fused quaternion to anchor roll/pitch only.
@@ -99,6 +109,10 @@ int NAV_FeedGNSS_Vel(NAV_Context *ctx, float32_t vN, float32_t vE);
 // quat_meas: body->NED [w,x,y,z].
 void NAV_FeedAttitude(NAV_Context *ctx, const float32_t *quat_meas);
 
+/// Read the current estimate.
+///   gyro: latest raw body angular rate (rad/s), 3 elements; returned in
+///         `out` with the estimated gyro bias removed
+///   out:  body-frame horizontal velocity (vx, vy) + bias-corrected rate
 void NAV_GetOutput(NAV_Context *ctx, const float32_t *gyro, NAV_Output *out);
 
 #endif

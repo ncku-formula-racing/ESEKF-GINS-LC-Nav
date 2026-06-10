@@ -1,0 +1,7 @@
+file(GLOB TEST_SOURCES "*.c")
+foreach(TEST_SRC ${TEST_SOURCES})
+    get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
+    add_executable(${TEST_NAME} ${TEST_SRC})
+    target_link_libraries(${TEST_NAME} PRIVATE kf_gins m)
+    target_compile_options(${TEST_NAME} PRIVATE -g -O0 -Wall)
+endforeach()
