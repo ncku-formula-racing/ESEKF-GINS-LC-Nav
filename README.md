@@ -44,6 +44,69 @@ How each number is chosen: next section.  Where each one enters the filter:
 [Derivation](#derivation).
 
 ## Tuning (MTi-630 + PX1120S)
+
+### `Q_psd_diag` from the IMU datasheet
+
+| Error block | Driven by | PSD formula |
+|---|---|---|
+| $\delta v$, $\delta\theta$ | sensor white noise | $Q_{psd} = N^2$, $N$ = noise density |
+| $\delta b_a$, $\delta b_g$ | bias random walk | $Q_{psd} = \sigma_{BI}^2/\tau_c$, $\tau_c \approx 1\,\mathrm{hr}$ |
+
+($\sigma_{BI}$ = in-run bias stability, $\tau_c$ = its Allan correlation
+time.)  Unit conversions:
+
+$$
+N_g\,[\mathrm{rad/\sqrt{s}}] = N_g\,[°/s/\sqrt{Hz}]\cdot\tfrac{\pi}{180},
+\qquad
+N_a\,[\mathrm{m/s/\sqrt{s}}] = N_a\,[g/\sqrt{Hz}]\cdot 9.81
+$$
+
+MTi-630 ([datasheet](https://www.xsens.com/hubfs/Downloads/Leaflets/MTi-630.pdf)):
+
+| Spec | Value | Converted | Q_psd entry |
+|---|---|---|---|
+| Gyro noise density | 0.007 °/s/√Hz | 1.22e-4 rad/√s | $\delta\theta$: **1.5e-8** rad²/s |
+| Gyro bias stability | 8 °/h | 3.88e-5 rad/s | $\delta b_g$: **4.2e-13** rad²/s³ |
+| Accel noise density | 60 µg/√Hz | 5.89e-4 m/s²/√Hz | $\delta v$: **3.5e-7** m²/s³ |
+| Accel bias stability | 10–15 µg | ~1.5e-4 m/s² | $\delta b_a$: **~6e-12** m²/s⁵ |
+
+Datasheet PSDs are a **lower bound**: the filter must also absorb
+linearization error, Euler integration, float32 round-off, vibration
+aliasing (usually dominant on the car) and temperature-driven bias drift.
+Inflate from there; it is the safe direction to err.
+
+### `R_diag`
+
+[PX1120S datasheet](https://www.skytraq.com.tw/homesite/PX1120S_DS.pdf):
+velocity accuracy 0.1 m/s → `R_diag = {0.01, 0.01}` $(\mathrm{m/s})^2$.
+That is an open-sky spec; in consistently degraded environments raise
+`R_diag` rather than relying on the gate.
+
+### `P0_diag`
+
+Variances of how well each state is known at `NAV_Init`:
+
+| Block | Value | σ | Rationale |
+|---|---|---|---|
+| $\delta v$ | 0.1 | 0.32 m/s | near rest / first GNSS fix |
+| $\delta\theta$ | 1e-3 | 1.8° | MTi fused attitude as seed |
+| $\delta b_a$ | 1e-4 | 1 mg | turn-on bias class |
+| $\delta b_g$ | 1e-5 | 0.18 °/s | turn-on bias class |
+
+### Remaining scalars
+
+- `gnss_chi2_gate`: 9.21 (χ², 2 DOF, 99%).  Reject threshold vs confidence
+  (higher = looser gate):
+
+  | DOF | 90% | 95% | 99% | 99.9% |
+  |---|---|---|---|---|
+  | 2 | 4.61 | 5.99 | **9.21** | 13.82 |
+- `lever_arm`: antenna position relative to the IMU, body axes (m).
+  `{0,0,0}` disables.  At ~2 rad/s yaw rate a 1 m offset is ~2 m/s of
+  apparent velocity, so measure it.
+- `att_tilt_var`: innovation components ≈ sin(tilt error); MTi-630 dynamic
+  roll/pitch ~0.25° → $(0.25 \cdot \pi/180)^2 \approx$ **2e-5** rad².
+
 ## Benchmark
 
 `tests/i2nav_test.c`, velocity RMSE (m/s):
