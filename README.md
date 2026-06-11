@@ -118,3 +118,201 @@ Variances of how well each state is known at `NAV_Init`:
 | ADIS16465 | 0.013 / 0.013 | 0.265 / 0.275 |
 | i300 | 0.007 / 0.007 | 0.265 / 0.275 |
 
+## Derivation
+
+ESKF: the INS integrates the IMU into a *nominal* state (velocity +
+attitude); the EKF estimates a 12-dim *error* state
+
+$$
+x = [\delta v,\ \delta\theta,\ \delta b_a,\ \delta b_g]
+$$
+
+(NED velocity error, attitude error, accel / gyro bias error).  After each
+update the error is injected into the nominal state and reset to zero, so
+the filter always linearizes around a small error.
+
+The EKF needs two objects, both derived below.  The transition matrix
+$\Phi$ propagates the error covariance $P$ between fixes; it comes from the
+error-state differential equations, whose coefficient matrix is $F$.  The
+observation matrices $H$ map the error state onto each measurement.
+
+### Conventions
+
+- Body frame **FRD**, navigation frame **NED**.  Earth rotation / Coriolis
+  ignored (far below MEMS noise at track scale).
+- Quaternions are **Hamilton** convention, stored `[w, x, y, z]`, body→NED.
+- $\hat\cdot$ = nominal (INS) quantity; $\delta$ = error = **truth −
+  estimate**.
+
+### Nominal propagation (`NAV_FeedIMU` → `INS_Propagate`)
+
+The IMU measures specific force $a_{meas}$ and angular rate $\omega_{meas}$
+(body frame).  Bias-compensate first:
+
+$$
+f = a_{meas} - \hat b_a,\qquad \omega = \omega_{meas} - \hat b_g
+$$
+
+$R(\hat q)$ is the rotation matrix of the nominal quaternion ($v_{ned} =
+R(\hat q)\,v_{body}$); below it is abbreviated $R$, and it is always
+evaluated at the current nominal attitude.  With gravity
+$g_n = (0, 0, +g)$ in NED:
+
+$$
+\dot{\hat v} = R\,f + g_n,\qquad
+\dot{\hat q} = \tfrac{1}{2}\,\hat q \otimes (0, \omega)
+$$
+
+integrated with first-order Euler + quaternion renormalization per sample.
+Here $\otimes$ is the quaternion product and $(0, \omega)$ the pure
+quaternion with vector part $\omega$.
+
+The quaternion equation comes from composing rotations: over $\Delta t$ the
+body rotates by $|\omega|\Delta t$ about $\omega/|\omega|$, whose quaternion
+(half-angle form) is
+
+$$
+\delta q(\Delta t) = \left(\cos\tfrac{|\omega|\Delta t}{2},\
+\tfrac{\omega}{|\omega|}\sin\tfrac{|\omega|\Delta t}{2}\right)
+$$
+
+A body-frame rotation composes on the right,
+$\hat q(t+\Delta t) = \hat q(t) \otimes \delta q(\Delta t)$, so
+
+$$
+\dot{\hat q} = \hat q \otimes \left.\tfrac{d\,\delta q}{d\Delta t}\right|_{\Delta t = 0}
+             = \hat q \otimes (0,\ \omega/2)
+$$
+
+(A NED-frame rotation composes on the left, which is exactly how the error
+injection applies $\delta\theta$.)
+
+### Error-state dynamics
+
+Velocity and bias errors are plain differences ($\delta v = v_{true} - \hat
+v$, etc.).  The attitude error is a rotation vector $\delta\theta$ (**NED
+frame**) entering through a left-multiplied error quaternion, using the
+same half-angle form as above with $\delta\theta$ in place of
+$\omega\Delta t$:
+
+$$
+q_{true} = \delta q(\delta\theta) \otimes \hat q
+$$
+
+The EKF keeps only first order in the error state; for the rotation this
+means
+
+$$
+\delta q = \begin{pmatrix}1\\ \delta\theta/2\end{pmatrix} + O(\delta\theta^2),
+\qquad
+R_{true} = \left(I + [\delta\theta]_\times\right) R + O(\delta\theta^2)
+$$
+
+with $[v]_\times$ the skew-symmetric matrix of $v$.  The derivations below
+use these forms and drop $O(\delta\theta^2)$ terms throughout.
+
+**Velocity.**  Truth and nominal see the same $a_{meas}$, so the true
+specific force is $f - \delta b_a - n_a$ ($n_a$ = accel white noise):
+
+$$
+\dot v_{true} = (I + [\delta\theta]_\times)\,R\,(f - \delta b_a - n_a) + g_n
+$$
+
+Expand, drop second-order products, and subtract $\dot{\hat v} = Rf + g_n$:
+
+$$
+\dot{\delta v} = -[R f]_\times\, \delta\theta - R\,\delta b_a - R\,n_a
+$$
+
+i.e. a tilt error mis-projects the specific force (gravity included) into
+NED; an accel bias error pushes velocity directly.
+
+**Attitude.**  Differentiate the definition $R_{true}R^T = I +
+[\delta\theta]_\times$, using $\dot R = R[\omega]_\times$ and
+$(R[\omega]_\times)^T = -[\omega]_\times R^T$:
+
+$$
+\frac{d}{dt}(R_{true}R^T) = R_{true}\,[\omega_{true} - \omega]_\times\,R^T
+$$
+
+The measured rate cancels inside the bracket: $\omega_{true} - \omega =
+-\delta b_g - n_g$.  The bracket is already first order, so replacing
+$R_{true}$ by $R$ only discards $O(\delta\theta^2)$ terms; with
+$R[v]_\times R^T = [Rv]_\times$:
+
+$$
+\dot{\delta\theta} = -R\,\delta b_g - R\,n_g
+$$
+
+Because $\omega_{meas}$ cancelled exactly, the NED-frame convention has
+**no** $-[\omega]_\times\delta\theta$ term (it only appears with a
+body-frame $\delta\theta$).  Quaternion version of the same derivation: top
+of `src/nav/nav.c`.
+
+**Biases.**  Random walk: $\dot{\delta b_a} = n_{ba}$, $\dot{\delta b_g} =
+n_{bg}$.
+
+### F and Φ (`build_Phi`)
+
+Collecting the equations above into $\dot x = Fx + \text{noise}$, in 3×3
+blocks over $x$:
+
+$$
+F = \begin{bmatrix}
+0 & -[R f]_\times & -R & 0\\
+0 & 0 & 0 & -R\\
+0 & 0 & 0 & 0\\
+0 & 0 & 0 & 0
+\end{bmatrix},
+\qquad
+\Phi = \exp(F\Delta t) = I_{12} + F\,\Delta t + O(\Delta t^2)
+$$
+
+`build_Phi` writes $\Phi$ into `A_buf` every IMU step (identity diagonal,
+six elements of $-[Rf]_\times\Delta t$, two $-R\Delta t$ blocks).  It is
+rebuilt each step because $R$ and $f$ change.
+
+### Process noise
+
+All process noises ($n_a$, $n_g$, $n_{ba}$, $n_{bg}$) are modeled zero-mean
+white Gaussian and mutually independent.  Their PSDs are `Q_psd_diag`, a
+continuous-time PSD (variance per second); each step uses
+$Q_d = \mathrm{diag}(Q_{psd})\cdot\Delta t$, making the tuning independent
+of IMU rate.  The noise enters $\delta v$/$\delta\theta$ through $R\,n$,
+and $R\,\mathrm{diag}(\sigma^2)R^T = \sigma^2 I$ only if the three axes
+share one density, so keep each block's three entries equal.
+
+### GNSS observation H (`NAV_FeedGNSS_Vel`)
+
+The antenna sits at $r$ = `lever_arm` (body, m) from the IMU, so GNSS
+measures $v_{ant} = v_{imu} + R(\omega \times r)$.  Remove the rotational
+term, then form the innovation against the nominal velocity:
+
+$$
+y = \begin{pmatrix} v_N^{gnss} \\ v_E^{gnss} \end{pmatrix}
+  - [R(\omega\times r)]_{N,E}
+  - \begin{pmatrix} \hat v_N \\ \hat v_E \end{pmatrix},
+\qquad
+H = [\,I_2 \ \ 0_{2\times10}\,]
+$$
+
+The corrected measurement equals $\hat v + \delta v + \nu$, i.e.
+$y = Hx + \nu$ with $H$ selecting $\delta v_{N,E}$ and the observation
+noise modeled zero-mean white Gaussian,
+$\nu \sim \mathcal{N}(0,\ \mathrm{diag}(\texttt{R\_diag}))$.  Outliers are
+rejected by a chi-square gate on $d^2 = y^T S^{-1} y$ with $S = HPH^T +
+R_{gnss}$ (the innovation covariance).  Under the Gaussian model
+$d^2 \sim \chi^2(2)$ when the filter is consistent, so
+`gnss_chi2_gate = 9.21` rejects at 99%.  The gate is loose after init while
+$P$ is large and tightens as the filter converges.
+
+### Attitude observation H (`NAV_FeedAttitude`, optional)
+
+Observes the gravity direction in body frame, $g_b = R^T e_3$ (the third
+row of $R$), which is independent of heading.  Innovation
+$z = g_b^{meas} - g_b^{ins}$,
+with observation noise modeled zero-mean white Gaussian,
+$\nu \sim \mathcal{N}(0,\ \texttt{att\_tilt\_var}\cdot I_3)$; perturbing $R$
+with $\delta\theta$ gives $H$ rows $(R_{1i},\ -R_{0i},\ 0)$ in the
+$\delta\theta$ columns.  The heading column is zero by construction, so the
+MTi's magnetometer yaw is never injected.
