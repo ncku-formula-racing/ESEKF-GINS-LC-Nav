@@ -24,6 +24,11 @@ anytime    ──> NAV_GetOutput(gyro, &out)
   measurement.  Optional (exists because the MTi-630 has an onboard AHRS);
   consumed only by `NAV_Init` (seed) and `NAV_FeedAttitude` (roll/pitch
   aid).
+- `gravity` (m/s²): local gravity magnitude.  With the MTi it can be
+  computed from the free-acceleration output as
+  $\lvert \mathrm{freeAcc} - R(\mathrm{quat})\,\mathrm{accel} \rvert$
+  (valid even in motion); without it, average
+  $\lvert \mathrm{accel} \rvert$ over a stationary window.
 - Output: `vx, vy` body-frame horizontal velocity (m/s); `wx, wy, wz`
   bias-corrected angular rate (rad/s)
 - `NAV_Context` is ~3.5 KB with every buffer inline, so make it `static`
