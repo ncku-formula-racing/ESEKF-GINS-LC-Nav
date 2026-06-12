@@ -294,17 +294,17 @@ measures $v_{ant} = v_{imu} + R(\omega \times r)$.  Remove the rotational
 term, then form the innovation against the nominal velocity:
 
 $$
-y = \begin{pmatrix} v_N^{gnss} \\ v_E^{gnss} \end{pmatrix}
-  - [R(\omega\times r)]_{N,E}
-  - \begin{pmatrix} \hat v_N \\ \hat v_E \end{pmatrix},
+y = \begin{pmatrix} v_N^{gnss} \\ v_E^{gnss} \end{pmatrix} -
+    [R(\omega\times r)]_{N,E} -
+    \begin{pmatrix} \hat v_N \\ \hat v_E \end{pmatrix},
 \qquad
 H = [\,I_2 \ \ 0_{2\times10}\,]
 $$
 
 The corrected measurement equals $\hat v + \delta v + \nu$, i.e.
 $y = Hx + \nu$ with $H$ selecting $\delta v_{N,E}$ and the observation
-noise modeled zero-mean white Gaussian,
-$\nu \sim \mathcal{N}(0,\ \mathrm{diag}(\texttt{R\_diag}))$.  Outliers are
+noise modeled zero-mean white Gaussian, $\nu \sim \mathcal{N}(0,\ R_{gnss})$,
+where $R_{gnss}$ is diagonal with the `R_diag` entries.  Outliers are
 rejected by a chi-square gate on $d^2 = y^T S^{-1} y$ with $S = HPH^T +
 R_{gnss}$ (the innovation covariance).  Under the Gaussian model
 $d^2 \sim \chi^2(2)$ when the filter is consistent, so
@@ -317,7 +317,8 @@ Observes the gravity direction in body frame, $g_b = R^T e_3$ (the third
 row of $R$), which is independent of heading.  Innovation
 $z = g_b^{meas} - g_b^{ins}$,
 with observation noise modeled zero-mean white Gaussian,
-$\nu \sim \mathcal{N}(0,\ \texttt{att\_tilt\_var}\cdot I_3)$; perturbing $R$
+$\nu \sim \mathcal{N}(0,\ \sigma_{tilt}^2 I_3)$ where $\sigma_{tilt}^2$ =
+`att_tilt_var`; perturbing $R$
 with $\delta\theta$ gives $H$ rows $(R_{1i},\ -R_{0i},\ 0)$ in the
 $\delta\theta$ columns.  The heading column is zero by construction, so the
 MTi's magnetometer yaw is never injected.
