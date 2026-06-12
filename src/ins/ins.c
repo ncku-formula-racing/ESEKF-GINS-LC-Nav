@@ -2,7 +2,7 @@
 
 #include "utils/utils.h"
 
-void INS_Init(INS_State *s, float32_t *vel0, float32_t *quat0,
+void INS_Init(INS_State *s, const float32_t *vel0, const float32_t *quat0,
               float32_t gravity) {
     for (int i = 0; i < 3; ++i) s->vel[i] = vel0[i];
     for (int i = 0; i < 4; ++i) s->quat[i] = quat0[i];

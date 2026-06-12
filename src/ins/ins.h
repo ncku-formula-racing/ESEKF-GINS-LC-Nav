@@ -12,7 +12,7 @@ typedef struct {
 /// vel0:    initial NED velocity (m/s), 3 elements
 /// quat0:   initial body-to-NED quaternion [w,x,y,z], 4 elements, unit norm
 /// gravity: local gravity magnitude (m/s^2), e.g. 9.81
-void INS_Init(INS_State *s, float32_t *vel0, float32_t *quat0,
+void INS_Init(INS_State *s, const float32_t *vel0, const float32_t *quat0,
               float32_t gravity);
 
 /// Integrate one IMU sample into the nominal state (first-order Euler).

@@ -86,7 +86,7 @@ typedef struct {
 /// vel0:    initial NED velocity (m/s), 3 elements
 /// quat0:   initial body-to-NED quaternion [w,x,y,z], 4 elements, unit norm
 /// gravity: local gravity magnitude (m/s^2), e.g. 9.81
-void NAV_Init(NAV_Context *ctx, float32_t *vel0, float32_t *quat0,
+void NAV_Init(NAV_Context *ctx, const float32_t *vel0, const float32_t *quat0,
               float32_t gravity, const NAV_Config *cfg);
 
 /// Propagate one raw IMU sample (bias compensation happens internally).

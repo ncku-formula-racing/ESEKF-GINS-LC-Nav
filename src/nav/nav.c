@@ -100,7 +100,7 @@ static void fill_diag(float32_t *mat, int n, const float32_t *diag) {
     for (int i = 0; i < n; i++) mat[i * n + i] = diag[i];
 }
 
-void NAV_Init(NAV_Context *ctx, float32_t *vel0, float32_t *quat0,
+void NAV_Init(NAV_Context *ctx, const float32_t *vel0, const float32_t *quat0,
               float32_t gravity, const NAV_Config *cfg) {
     INS_Init(&ctx->ins, vel0, quat0, gravity);
     memset(ctx->x_buf, 0, sizeof(ctx->x_buf));
